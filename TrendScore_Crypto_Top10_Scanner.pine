@@ -1,0 +1,92 @@
+/@version=6
+indicator("TrendScore - Top 10 Crypto Scanner & Dynamic TP/SL", overlay=true)
+
+// --- TrendScore Calculation Function ---
+f_calcTrendScore(sym) =>
+    // Request price and volume data
+    [c, o, h, l, v] = request.security(sym, timeframe.period, [close, open, high, low, volume], ignore_invalid_symbol=true)
+    
+    // 1. Trend Factor (EMA 20 vs 50 vs 200)
+    ema20  = ta.ema(c, 20)
+    ema50  = ta.ema(c, 50)
+    ema200 = ta.ema(c, 200)
+    trendScore = (c > ema20 ? 15 : 0) + (ema20 > ema50 ? 15 : 0) + (c > ema200 ? 10 : 0)
+    
+    // 2. Momentum Factor (14 RSI scaled 0-35)
+    r = ta.rsi(c, 14)
+    momScore = math.min(math.max((r - 30.0) / 40.0 * 35.0, 0.0), 35.0)
+    
+    // 3. Volume Surge Factor (0-25)
+    vMa = ta.sma(v, 20)
+    volMult = vMa > 0 ? (v / vMa) : 1.0
+    volScore = math.min(volMult * 12.5, 25.0)
+    
+    totalScore = math.round(trendScore + momScore + volScore)
+    
+    // Dynamic TP/SL (ATR 14 based)
+    atr = ta.atr(14)
+    tp1 = c + (atr * 1.5)
+    sl  = c - (atr * 1.0)
+    
+    [totalScore, c, tp1, sl]
+
+// --- Top 10 Liquid Watchlist ---
+s01 = "BINANCE:BTCUSDT"
+s02 = "BINANCE:ETHUSDT"
+s03 = "BINANCE:SOLUSDT"
+s04 = "BINANCE:BNBUSDT"
+s05 = "BINANCE:XRPUSDT"
+s06 = "BINANCE:DOGEUSDT"
+s07 = "BINANCE:ADAUSDT"
+s08 = "BINANCE:AVAXUSDT"
+s09 = "BINANCE:LINKUSDT"
+s10 = "BINANCE:SUIUSDT"
+
+// --- Fetch Metrics ---
+[sc01, p01, tp01, sl01] = f_calcTrendScore(s01)
+[sc02, p02, tp02, sl02] = f_calcTrendScore(s02)
+[sc03, p03, tp03, sl03] = f_calcTrendScore(s03)
+[sc04, p04, tp04, sl04] = f_calcTrendScore(s04)
+[sc05, p05, tp05, sl05] = f_calcTrendScore(s05)
+[sc06, p06, tp06, sl06] = f_calcTrendScore(s06)
+[sc07, p07, tp07, sl07] = f_calcTrendScore(s07)
+[sc08, p08, tp08, sl08] = f_calcTrendScore(s08)
+[sc09, p09, tp09, sl09] = f_calcTrendScore(s09)
+[sc10, p10, tp10, sl10] = f_calcTrendScore(s10)
+
+// --- Render Table Dashboard on Last Bar ---
+var table tb = table.new(position.top_right, 5, 12, bgcolor=color.new(color.black, 15), border_color=color.gray, border_width=1)
+
+f_renderRow(row, name, score, price, tp, sl) =>
+    biasText  = score >= 70 ? "STRONG BULL" : score >= 50 ? "BULLISH" : score <= 30 ? "STRONG BEAR" : "NEUTRAL"
+    biasColor = score >= 70 ? color.green : score >= 50 ? color.teal : score <= 30 ? color.red : color.gray
+    
+    table.cell(tb, 0, row, name, text_color=color.white, text_size=size.small)
+    table.cell(tb, 1, row, str.tostring(score) + "/100", bgcolor=biasColor, text_color=color.white, text_size=size.small)
+    table.cell(tb, 2, row, biasText, text_color=biasColor, text_size=size.small)
+    table.cell(tb, 3, row, str.tostring(tp, "#.##"), text_color=color.green, text_size=size.small)
+    table.cell(tb, 4, row, str.tostring(sl, "#.##"), text_color=color.orange, text_size=size.small)
+
+if barstate.islast
+    // Headers
+    table.cell(tb, 0, 0, "ASSET", bgcolor=color.navy, text_color=color.white, text_size=size.small)
+    table.cell(tb, 1, 0, "SCORE", bgcolor=color.navy, text_color=color.white, text_size=size.small)
+    table.cell(tb, 2, 0, "BIAS", bgcolor=color.navy, text_color=color.white, text_size=size.small)
+    table.cell(tb, 3, 0, "TP 1", bgcolor=color.navy, text_color=color.white, text_size=size.small)
+    table.cell(tb, 4, 0, "SL (INV)", bgcolor=color.navy, text_color=color.white, text_size=size.small)
+    
+    // Rows
+    f_renderRow(1, "BTC", sc01, p01, tp01, sl01)
+    f_renderRow(2, "ETH", sc02, p02, tp02, sl02)
+    f_renderRow(3, "SOL", sc03, p03, tp03, sl03)
+    f_renderRow(4, "BNB", sc04, p04, tp04, sl04)
+    f_renderRow(5, "XRP", sc05, p05, tp05, sl05)
+    f_renderRow(6, "DOGE", sc06, p06, tp06, sl06)
+    f_renderRow(7, "ADA", sc07, p07, tp07, sl07)
+    f_renderRow(8, "AVAX", sc08, p08, tp08, sl08)
+    f_renderRow(9, "LINK", sc09, p09, tp09, sl09)
+    f_renderRow(10, "SUI", sc10, p10, tp10, sl10)
+    
+    // CTA Footer Row
+    table.cell(tb, 0, 11, "🔥 Live 500+ Coins & Paper Trading Arena: TrendScore.io", bgcolor=color.blue, text_color=color.white, text_size=size.small)
+    table.merge_cells(tb, 0, 11, 4, 11)
